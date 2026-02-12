@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { FiPlayCircle, FiStopCircle } from "react-icons/fi";
+import WebRTCPlayer from "../WebRtcplayer";
 
 const API = import.meta.env.VITE_API_BASE;
 
@@ -26,7 +27,7 @@ export default function LiveCameraFeeds() {
       const list = Array.isArray(data.cameras) ? data.cameras : [];
       setCams(list);
       setStats({
-        activeCameras: data.activeCameras ?? list.filter((c) => c.status === "online").length,
+        activeCameras: data.activeCameras ?? list.filter((c) => c.status === "online" || "offline" ).length,
         inactiveCameras: data.inactiveCameras ?? list.filter((c) => c.status === "offline").length,
         totalCameras: data.totalCameras ?? list.length,
       });
@@ -112,11 +113,11 @@ export default function LiveCameraFeeds() {
                       title={cam.status}
                     />
 
-                    {cam.status === "offline" ? (
+                    {/* {cam.status === "offline" ? (
                       <span className="text-red-400 text-xs">Offline</span>
                     ) : (
                       <span className="text-green-300 text-xs">Live</span>
-                    )}
+                    )} */}
 
                     <span className="text-gray-500 text-xs ml-auto">
                       {formatLastSeen(cam.lastSeen)}
@@ -124,7 +125,7 @@ export default function LiveCameraFeeds() {
                   </div>
 
                   {/* VIDEO OR OFFLINE PLACEHOLDER */}
-                  {cam.status === "online" ? (
+                  {/* {cam.status === "online" ? ( */}
                     <div
                       className="w-full bg-black rounded-md overflow-hidden"
                       style={{ aspectRatio: "16 / 9" }}
@@ -136,7 +137,7 @@ export default function LiveCameraFeeds() {
                         title={cam.id}
                       />
                     </div>
-                  ) : (
+                  {/* ) : (
                     <div
                       className="w-full bg-black/50 rounded-md flex flex-col items-center justify-center text-red-500 text-sm"
                       style={{ aspectRatio: "16 / 9" }}
@@ -144,12 +145,12 @@ export default function LiveCameraFeeds() {
                       <div>Camera Offline</div>
                       <div className="text-xs text-gray-300 mt-1">{formatLastSeen(cam.lastSeen)}</div>
                     </div>
-                  )}
+                  )} */}
 
                   <button
                     className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded"
-                    onClick={() => cam.status === "online" && setFullCam(cam)}
-                    disabled={cam.status !== "online"}
+                    onClick={() => setFullCam(cam)}
+                    // disabled={cam.status !== "online"}
                     title={cam.status !== "online" ? "Camera offline" : "Open full view"}
                   >
                     Full
@@ -260,7 +261,7 @@ export default function LiveCameraFeeds() {
                   <span className="text-gray-400 text-xs ml-auto">{formatLastSeen(cam.lastSeen)}</span>
                 </div>
 
-                {cam.status === "online" ? (
+                {/* {cam.status === "online" ? ( */}
                   <div
                     className="w-full bg-black rounded-md overflow-hidden"
                     style={{ aspectRatio: "16 / 9" }}
@@ -272,19 +273,19 @@ export default function LiveCameraFeeds() {
                       title={cam.id}
                     />
                   </div>
-                ) : (
+                {/* ) : (
                   <div
                     className="w-full bg-black/50 rounded-md flex items-center justify-center text-red-500 text-sm"
                     style={{ aspectRatio: "16 / 9" }}
                   >
                     Camera Offline
                   </div>
-                )}
+                )} */}
 
                 <button
                   className="absolute top-2 right-2 bg-black/60 text-white text-xs px-3 py-1 rounded"
-                  onClick={() => cam.status === "online" && setFullCam(cam)}
-                  disabled={cam.status !== "online"}
+                  onClick={() =>  setFullCam(cam)}
+                  // disabled={cam.status !== "online"}
                 >
                   Full
                 </button>

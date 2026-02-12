@@ -15,10 +15,10 @@ export const AnalyticsProvider = ({ children }) => {
     incidents: [],
     system: {},
   });
-
+const API = import.meta.env.VITE_API_BASE || "http://localhost:4000/api";
   const fetchData = async () => {
     try {
-      const res = await axios.get("http://localhost:3000/api/analytics");
+      const res = await axios.get(`${API}/analytics`);
       setData(res.data);
     } catch (err) {
       console.error("Analytics fetch error:", err);
