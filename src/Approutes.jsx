@@ -4,10 +4,12 @@ import IncidentManagementPage from './pages/IncidentManagementPage'
 import AnalyticsReportsPage from './pages/AnalyticsReportsPage'
 import PlaybackPage from './pages/Playback'
 import Setting from './pages/Setting'
+import PPEViolations from './pages/PPEViolations'
 const Approutes = () => {
   return (
     <Routes>
       <Route path='/' element={<DashboardPage/>}/>
+      <Route path='/ppe-violations' element={<PPEViolations/>}/>
       <Route path='/incidents' element={<IncidentManagementPage/>}/>
       <Route path='/analytics' element={<AnalyticsReportsPage/>}/>
       <Route path='/playback' element={<PlaybackPage/>}/>

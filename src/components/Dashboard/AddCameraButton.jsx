@@ -9,7 +9,7 @@ const AddCameraButton = ({ onCameraAdded }) => {
     <>
       <button
         onClick={() => setIsModalOpen(true)}
-        className="group flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-lg shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 transition-all duration-200"
+        className="group flex w-full align-center items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-lg shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 transition-all duration-200"
       >
         <div className="relative">
           <Video className="w-5 h-5" />
