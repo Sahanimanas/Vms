@@ -1,138 +1,192 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import axios from "axios";
-import { getCamerasStatus, startSavedCamera, stopCamera } from "../api/cameraApi";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { getCamerasStatus, smartCameraAction, stopCamera } from "../api/cameraApi";
 
-const DashboardContext = createContext(null);
-export const useDashboard = () => useContext(DashboardContext);
+const DashboardContext = createContext();
+
+export const useDashboard = () => {
+  const context = useContext(DashboardContext);
+  if (!context) {
+    throw new Error("useDashboard must be used within DashboardProvider");
+  }
+  return context;
+};
 
 export const DashboardProvider = ({ children }) => {
   const [data, setData] = useState({
-    stats: null,
     cameras: [],
-    alerts: [],
-    events: [],
-    violationsToday: 0,
+    stats: {
+      activeCameras: 0,
+      totalCameras: 0,
+      inactiveCameras: 0,
+      openIncidents: 0,
+      ppeViolationsToday: 0,
+      systemHealthPercent: 100,
+    },
   });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const [loading, setLoading] = useState(false);
+  // Transform backend data to frontend format
+  const transformCameraData = (statusData) => {
+    const cameras = [];
+    const savedCameras = statusData.saved_cameras || {};
 
-  const API = import.meta.env.VITE_API_BASE || "http://localhost:4000/api";
-  const FASTAPI = import.meta.env.VITE_FASTAPI_BASE || "http://localhost:9000";
+    Object.keys(savedCameras).forEach((cameraId) => {
+      const config = savedCameras[cameraId];
+      const activeStatus = statusData.active_status?.[cameraId];
 
-  const fetchAll = async () => {
+      cameras.push({
+        id: cameraId,
+        name: config.camera_name || cameraId,
+        location: config.location || "",
+        status: config.is_active && activeStatus?.running ? "online" : "offline",
+        rtsp_url: config.rtsp_url,
+        total_detections: config.total_detections || 0,
+        lastSeen: config.last_active || null,
+        is_active: config.is_active || false,
+        running: activeStatus?.running || false,
+      });
+    });
+
+    return cameras;
+  };
+
+  // Fetch dashboard data
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
 
-      // Fetch camera status from FastAPI
-      let statusData = { 
-        active_cameras: 0, 
-        total_saved_cameras: 0, 
-        active_status: {}, 
-        saved_cameras: {},
-        violations_today: 0
-      };
+      const result = await getCamerasStatus();
 
-      try {
-        statusData = await getCamerasStatus();
-      } catch (err) {
-        console.warn("Camera API unavailable:", err.message);
+      if (result.success) {
+        const statusData = result.data;
+        const cameras = transformCameraData(statusData);
+
+        const activeCameras = cameras.filter((c) => c.status === "online").length;
+        const totalCameras = cameras.length;
+
+        setData({
+          cameras,
+          stats: {
+            activeCameras,
+            totalCameras,
+            inactiveCameras: totalCameras - activeCameras,
+            openIncidents: 0, // Backend doesn't provide this yet
+            ppeViolationsToday: statusData.violations_today || 0,
+            systemHealthPercent: activeCameras > 0 ? Math.round((activeCameras / totalCameras) * 100) : 0,
+          },
+        });
+      } else {
+        setError("Failed to load dashboard data");
+        console.error("Dashboard fetch error:", result.error);
       }
-
-      // Fetch alerts from Express backend (if available)
-      let alerts = [];
-      try {
-        const alertRes = await axios.get(`${API}/alerts`);
-        alerts = alertRes.data || [];
-      } catch (err) {
-        console.warn("Alerts API unavailable:", err.message);
-      }
-
-      // Calculate stats
-      const activeCameras = statusData.active_cameras ?? 0;
-      const totalCameras = statusData.total_saved_cameras ?? 0;
-      const inactiveCameras = totalCameras - activeCameras;
-      const violationsToday = statusData.violations_today ?? 0;
-
-      const stats = {
-        activeCameras,
-        totalCameras,
-        inactiveCameras,
-        openIncidents: 0,
-        ppeViolationsToday: violationsToday,
-        systemHealthPercent: totalCameras > 0 ? Math.round((activeCameras / totalCameras) * 100) : 0,
-      };
-
-      // Map saved cameras to array format
-      const savedCamerasDict = statusData.saved_cameras || {};
-      const activeStatusDict = statusData.active_status || {};
-
-      const cameraList = Object.entries(savedCamerasDict).map(([camId, config]) => {
-        const isActive = config.is_active || camId in activeStatusDict;
-        return {
-          id: camId,
-          name: config.camera_name || camId,
-          rtsp_url: config.rtsp_url,
-          location: config.location,
-          status: isActive ? "online" : "offline",
-          confidence_threshold: config.confidence_threshold,
-          total_detections: config.total_detections || 0,
-          lastSeen: config.last_active || (isActive ? new Date().toISOString() : null),
-        };
-      });
-
-      setData({
-        stats,
-        cameras: cameraList,
-        alerts,
-        events: [],
-        violationsToday,
-      });
-
     } catch (err) {
-      console.error("Failed to fetch dashboard", err);
+      setError("Failed to load dashboard data");
+      console.error("Dashboard error:", err);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Camera control functions
-  const startCamera = async (cameraId) => {
-    try {
-      await startSavedCamera(cameraId);
-      await fetchAll(); // Refresh data
-      return { success: true };
-    } catch (error) {
-      console.error("Failed to start camera:", error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const stopCameraById = async (cameraId) => {
-    try {
-      await stopCamera(cameraId);
-      await fetchAll(); // Refresh data
-      return { success: true };
-    } catch (error) {
-      console.error("Failed to stop camera:", error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  useEffect(() => {
-    fetchAll();
-    const interval = setInterval(fetchAll, 10000); // Poll every 10s
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Start camera using smart action
+  const startCamera = async (cameraId) => {
+    try {
+      console.log(`Starting camera: ${cameraId}`);
+      
+      const result = await smartCameraAction(cameraId);
+      
+      if (result.success) {
+        console.log(`Camera ${cameraId} action result:`, result.data);
+        
+        // Refresh data after action
+        await fetchData();
+        
+        return {
+          success: true,
+          message: result.data.message || "Camera action completed",
+          data: result.data
+        };
+      } else {
+        console.error(`Failed to start camera ${cameraId}:`, result.error);
+        return {
+          success: false,
+          error: result.error,
+          message: result.message
+        };
+      }
+    } catch (error) {
+      console.error(`Error starting camera ${cameraId}:`, error);
+      return {
+        success: false,
+        error: error,
+        message: error.message || "Unknown error occurred"
+      };
+    }
+  };
+
+  // Stop camera
+  const stopCameraAction = async (cameraId) => {
+    try {
+      console.log(`Stopping camera: ${cameraId}`);
+      
+      const result = await stopCamera(cameraId);
+      
+      if (result.success) {
+        console.log(`Camera ${cameraId} stopped:`, result.data);
+        
+        // Refresh data after action
+        await fetchData();
+        
+        return {
+          success: true,
+          message: result.data.message || "Camera stopped",
+          data: result.data
+        };
+      } else {
+        console.error(`Failed to stop camera ${cameraId}:`, result.error);
+        return {
+          success: false,
+          error: result.error,
+          message: result.message
+        };
+      }
+    } catch (error) {
+      console.error(`Error stopping camera ${cameraId}:`, error);
+      return {
+        success: false,
+        error: error,
+        message: error.message || "Unknown error occurred"
+      };
+    }
+  };
+
+  // Refresh data
+  const refresh = useCallback(async () => {
+    await fetchData();
+  }, [fetchData]);
+
+  // Initial load
+  useEffect(() => {
+    fetchData();
+    
+    // Auto-refresh every 5 seconds
+    const interval = setInterval(() => {
+      fetchData();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
   return (
-    <DashboardContext.Provider 
-      value={{ 
-        data, 
+    <DashboardContext.Provider
+      value={{
+        data,
         loading,
-        refresh: fetchAll,
+        error,
         startCamera,
-        stopCamera: stopCameraById,
+        stopCamera: stopCameraAction,
+        refresh,
       }}
     >
       {children}

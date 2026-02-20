@@ -1,106 +1,410 @@
-import axios from "axios";
+import axios from 'axios';
 
-const FASTAPI_BASE = import.meta.env.VITE_FASTAPI_BASE || "http://localhost:9000";
+const API_BASE_URL = import.meta.env.VITE_FASTAPI_BASE || 'http://localhost:9000';
 
-// ==================== Camera APIs ====================
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
 
-export const getCamerasStatus = async () => {
-  const response = await axios.get(`${FASTAPI_BASE}/cameras/status`);
-  return response.data;
+// ==================== SMART CAMERA OPERATIONS ====================
+
+/**
+ * Smart start - Backend checks status and starts if needed
+ */
+export const smartCameraAction = async (cameraId) => {
+  try {
+    const response = await api.post(`/cameras/check-and-start/${encodeURIComponent(cameraId)}`);
+    return {
+      success: true,
+      data: response.data,
+      action: response.data.status
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      message: error.response?.data?.detail?.message || error.response?.data?.detail || error.message
+    };
+  }
 };
 
-export const startSavedCamera = async (cameraId) => {
-  const response = await axios.post(`${FASTAPI_BASE}/cameras/start-saved/${cameraId}`);
-  return response.data;
-};
-
+/**
+ * Stop camera
+ */
 export const stopCamera = async (cameraId) => {
-  const response = await axios.delete(`${FASTAPI_BASE}/camera/${cameraId}`);
-  return response.data;
+  try {
+    const response = await api.delete(`/camera/${encodeURIComponent(cameraId)}`);
+    return {
+      success: true,
+      data: response.data,
+      message: response.data.message
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      message: error.response?.data?.detail || error.message
+    };
+  }
 };
 
-export const saveCameraConfig = async (config) => {
-  const response = await axios.post(`${FASTAPI_BASE}/cameras/save`, config);
-  return response.data;
+/**
+ * Test RTSP connection
+ */
+export const testConnection = async (rtspUrl) => {
+  try {
+    const response = await api.post('/cameras/test-connection', null, {
+      params: { rtsp_url: rtspUrl }
+    });
+    return {
+      success: response.data.success,
+      data: response.data,
+      message: response.data.message
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      message: error.response?.data?.detail || error.message
+    };
+  }
 };
 
+// ==================== CAMERA MANAGEMENT ====================
+
+/**
+ * Get status of all cameras
+ */
+export const getCamerasStatus = async () => {
+  try {
+    const response = await api.get('/cameras/status');
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    console.error('Error fetching cameras status:', error);
+    return {
+      success: false,
+      error: error,
+      data: {
+        active_cameras: 0,
+        total_saved_cameras: 0,
+        saved_cameras: {},
+        active_status: {},
+        violations_today: 0
+      }
+    };
+  }
+};
+
+/**
+ * Get all saved camera configurations
+ */
 export const getSavedCameras = async () => {
-  const response = await axios.get(`${FASTAPI_BASE}/cameras/saved`);
-  return response.data;
+  try {
+    const response = await api.get('/cameras/saved');
+    return {
+      success: true,
+      data: response.data.cameras
+    };
+  } catch (error) {
+    console.error('Error fetching saved cameras:', error);
+    return {
+      success: false,
+      error: error,
+      data: {}
+    };
+  }
 };
 
-export const deleteSavedCamera = async (cameraId) => {
-  const response = await axios.delete(`${FASTAPI_BASE}/cameras/saved/${cameraId}`);
-  return response.data;
+/**
+ * Save camera configuration
+ */
+export const saveCameraConfig = async (config) => {
+  try {
+    const response = await api.post('/cameras/save', config);
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      message: error.response?.data?.detail || error.message
+    };
+  }
 };
 
+/**
+ * Delete camera configuration
+ */
+export const deleteCameraConfig = async (cameraId) => {
+  try {
+    const response = await api.delete(`/cameras/saved/${encodeURIComponent(cameraId)}`);
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      message: error.response?.data?.detail || error.message
+    };
+  }
+};
+
+/**
+ * Get camera stream URL
+ */
 export const getStreamUrl = (cameraId) => {
-  return `${FASTAPI_BASE}/camera/${cameraId}/stream`;
+  return `${API_BASE_URL}/camera/${encodeURIComponent(cameraId)}/stream`;
 };
 
-// ==================== Violation APIs ====================
-
-export const getAllViolations = async () => {
-  const response = await axios.get(`${FASTAPI_BASE}/violations`);
-  return response.data;
-};
-
-export const getViolationsToday = async () => {
-  const response = await axios.get(`${FASTAPI_BASE}/violations/today`);
-  return response.data;
-};
-
-export const getViolationsByRange = async (startDate, endDate) => {
-  const response = await axios.get(`${FASTAPI_BASE}/violations/range`, {
-    params: { start_date: startDate, end_date: endDate }
-  });
-  return response.data;
-};
-
-export const getViolationDetails = async (violationId) => {
-  const response = await axios.get(`${FASTAPI_BASE}/violations/${violationId}`);
-  return response.data;
-};
-
-export const deleteViolation = async (violationId) => {
-  const response = await axios.delete(`${FASTAPI_BASE}/violations/${violationId}`);
-  return response.data;
-};
-
-export const getViolationImageUrl = (violationId) => {
-  return `${FASTAPI_BASE}/violations/image/${violationId}`;
-};
-
-// Helper to get violation image path from filename
-export const getViolationImagePath = (imageFilename) => {
-  return `${FASTAPI_BASE}/violation-images/${imageFilename}`;
-};
-
-// ==================== Detection APIs ====================
-
+/**
+ * Get camera detections
+ */
 export const getCameraDetections = async (cameraId) => {
-  const response = await axios.get(`${FASTAPI_BASE}/camera/${cameraId}/detections`);
-  return response.data;
+  try {
+    const response = await api.get(`/camera/${encodeURIComponent(cameraId)}/detections`);
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      data: { detections: [] }
+    };
+  }
 };
 
-// WebSocket connection for real-time detections
-export const connectDetectionsWebSocket = (cameraId, onMessage, onError) => {
-  const wsUrl = `ws://localhost:9000/camera/${cameraId}/detections-ws`;
+/**
+ * Get camera statistics
+ */
+export const getCameraStats = async (cameraId) => {
+  try {
+    const response = await api.get(`/camera/${encodeURIComponent(cameraId)}/stats`);
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      data: null
+    };
+  }
+};
+
+// ==================== VIOLATIONS ====================
+
+/**
+ * Get all violations
+ */
+export const getViolations = async () => {
+  try {
+    const response = await api.get('/violations');
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      data: { violations: [], total: 0 }
+    };
+  }
+};
+
+/**
+ * Get today's violations
+ */
+export const getViolationsToday = async () => {
+  try {
+    const response = await api.get('/violations/today');
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      data: { violations: [], total: 0 }
+    };
+  }
+};
+
+/**
+ * Get violations by date range
+ */
+export const getViolationsByRange = async (startDate, endDate) => {
+  try {
+    const response = await api.get('/violations/range', {
+      params: { start_date: startDate, end_date: endDate }
+    });
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      data: { violations: [], total: 0 }
+    };
+  }
+};
+
+/**
+ * Get violations by camera
+ */
+export const getViolationsByCamera = async (cameraId) => {
+  try {
+    const response = await api.get(`/violations/camera/${encodeURIComponent(cameraId)}`);
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      data: { violations: [], total: 0 }
+    };
+  }
+};
+
+/**
+ * Delete violation
+ */
+export const deleteViolation = async (violationId) => {
+  try {
+    const response = await api.delete(`/violations/${violationId}`);
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      message: error.response?.data?.detail || error.message
+    };
+  }
+};
+
+/**
+ * Get violation image URL
+ */
+export const getViolationImageUrl = (imagePath) => {
+  return `${API_BASE_URL}/violation-images/${imagePath}`;
+};
+
+/**
+ * Get violation statistics
+ */
+export const getViolationStats = async () => {
+  try {
+    const response = await api.get('/violations/stats');
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+      data: null
+    };
+  }
+};
+
+// ==================== WEBSOCKET ====================
+
+/**
+ * Create WebSocket connection for real-time detections
+ */
+export const createDetectionWebSocket = (cameraId, onMessage, onError) => {
+  const wsUrl = `ws://${API_BASE_URL.replace('http://', '').replace('https://', '')}/camera/${cameraId}/detections-ws`;
+  
   const ws = new WebSocket(wsUrl);
   
   ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    onMessage(data);
+    try {
+      const data = JSON.parse(event.data);
+      onMessage(data);
+    } catch (e) {
+      console.error('WebSocket message parse error:', e);
+    }
   };
   
   ws.onerror = (error) => {
-    console.error("WebSocket error:", error);
+    console.error('WebSocket error:', error);
     if (onError) onError(error);
   };
   
   ws.onclose = () => {
-    console.log("WebSocket closed");
+    console.log('WebSocket closed for camera:', cameraId);
   };
   
   return ws;
+};
+
+// ==================== UTILITY ====================
+
+/**
+ * Get API base URL
+ */
+export const getApiBaseUrl = () => API_BASE_URL;
+
+/**
+ * Health check
+ */
+export const healthCheck = async () => {
+  try {
+    const response = await api.get('/');
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error
+    };
+  }
+};
+
+export default {
+  smartCameraAction,
+  stopCamera,
+  testConnection,
+  getCamerasStatus,
+  getSavedCameras,
+  saveCameraConfig,
+  deleteCameraConfig,
+  getStreamUrl,
+  getCameraDetections,
+  getCameraStats,
+  getViolations,
+  getViolationsToday,
+  getViolationsByRange,
+  getViolationsByCamera,
+  deleteViolation,
+  getViolationImageUrl,
+  getViolationStats,
+  createDetectionWebSocket,
+  getApiBaseUrl,
+  healthCheck
 };
